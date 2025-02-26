@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential libfftw3-dev libeigen3-dev libgtest-dev
+
+    - name: Create Build Directory
+      run: cmake -E make_directory ${{github.workspace}}/build
+
+    - name: Configure CMake
+      working-directory: ${{github.workspace}}/build
+      run: cmake ${{github.workspace}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: Build
+      working-directory: ${{github.workspace}}/build
+      run: cmake --build . --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+
+    - name: Install
+      working-directory: ${{github.workspace}}/build
+      run: sudo cmake --install .
+
+    # Basic smoke test of the installed library
+    - name: Verify Installation
+      run: |
+        mkdir smoke_test && cd smoke_test
+        cat > CMakeLists.txt << 'EOL'
+        cmake_minimum_required(VERSION 3.15)
+        project(smoke_test)
+        find_package(stretch_engine REQUIRED)
+        add_executable(test_app main.cpp)
+        target_link_libraries(test_app PRIVATE stretch_engine)
+        EOL
+        cat > main.cpp << 'EOL'
+        #include <stretch_engine.h>
+        int main() {
+          audio::EngineConfig config;
+          audio::StretchEngine engine(config);
+          return 0;
+        }
+        EOL
+        cmake -B build
+        cmake --build build
+
+  macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        brew install fftw eigen googletest
+
+    - name: Configure and Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        cmake --build build
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+
+  windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        .\vcpkg\bootstrap-vcpkg.bat
+        .\vcpkg\vcpkg install fftw3:x64-windows eigen3:x64-windows gtest:x64-windows
+
+    - name: Configure and Build
+      run: |
+        cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        cmake --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format cppcheck
+
+    - name: Check Format
+      run: |
+        find . -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run -Werror
+
+    - name: Static Analysis
+      run: |
+        cppcheck --enable=all --error-exitcode=1 include/ src/

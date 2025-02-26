@@ -1,0 +1,21 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find dependencies
+find_dependency(FFTW3)
+find_dependency(Eigen3 3.3 REQUIRED NO_MODULE)
+
+# Import targets
+include("${CMAKE_CURRENT_LIST_DIR}/stretch_engine-targets.cmake")
+
+# Set variables for includes/libs
+set_and_check(STRETCH_ENGINE_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set_and_check(STRETCH_ENGINE_LIBRARY_DIR "@PACKAGE_LIB_INSTALL_DIR@")
+
+# Check all required components are available
+check_required_components(stretch_engine)
+
+# Compatibility variables
+set(STRETCH_ENGINE_LIBRARIES stretch_engine)
+set(STRETCH_ENGINE_INCLUDE_DIRS "${STRETCH_ENGINE_INCLUDE_DIR}")
